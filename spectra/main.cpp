@@ -31,7 +31,7 @@ const unsigned int SCR_WIDTH = 1600;
 const unsigned int SCR_LENGTH = 1200;
 
 //Camera object with initial pos
-Camera camera(glm::vec3(0.0f, 1.5f, 1.5f));
+Camera camera(glm::vec3(0.0f, 0.0f, 2.0f));
 
 //Mouse Inputs
 float lastX = SCR_WIDTH / 2.0;
@@ -44,10 +44,10 @@ float lastFrame = 0.0f; // Time of last frame
 
 // positions of the point lights
 glm::vec3 pointLightPositions[] = {
-	glm::vec3(0.0f,  0.5f, -0.5f),
-	glm::vec3(0.75f,  0.0f, 0.0f),
-	glm::vec3(-0.75f,  0.0f, 0.0f),
-	glm::vec3(-9.95f,  0.5f, 0.0f)
+	glm::vec3(0.0f,  0.5f, 0.5f),
+	glm::vec3(0.75f,  0.0f, 0.5f),
+	glm::vec3(-0.75f,  0.0f, 0.5f),
+	glm::vec3(-9.95f,  0.5f, 0.5f)
 };
 
 // Vertices coordinates
@@ -173,6 +173,8 @@ const int MAX_CUBES = 12;
 
 std::deque<glm::vec3> cubePositions;
 glm::vec3 cubePos = glm::vec3(-1.0f, 0.0f, 1.0f);
+glm::vec3 plankRot = glm::vec3(90.0f, 0.0f, 0.0f);
+glm::vec3 ambientDir = glm::vec3(1.0f, -1.0f, 0.0f);
 
 int main() 
 {
@@ -232,7 +234,7 @@ int main()
 	std::vector <Texture> tex(textures, textures + sizeof(textures) / sizeof(Texture));
 
 	glm::vec3 plankPosition = glm::vec3(0.0f);
-	glm::vec3 plankRotation = glm::vec3(0.0f);
+	glm::vec3 plankRotation = glm::vec3(-90.0f);
 	glm::vec3 plankScale = glm::vec3(1.0f);
 
 	Mesh plank(verts, ind, tex);
@@ -243,18 +245,16 @@ int main()
 
 #pragma region Instanced Cube
 
-	/*Texture instancedTextures[]
+	Texture instancedTextures[]
 	{
 		Texture(textureDirectory, "container2.png", "diffuse", 0, GL_UNSIGNED_BYTE),
 		Texture(textureDirectory, "container2_specular.png", "specular", 1, GL_UNSIGNED_BYTE)
-	};*/
+	};
 
 	// Store mesh data in vectors for the mesh
-	//std::vector <Vertex> cubeVerts(instancedVertices, instancedVertices + sizeof(instancedVertices) / sizeof(Vertex));	
-	std::vector <Vertex> cubeVerts(lightVertices, lightVertices + sizeof(lightVertices) / sizeof(Vertex));
-	//std::vector <GLuint> cubeInd(instancedIndices, instancedIndices + sizeof(instancedIndices) / sizeof(GLuint));
-	std::vector <GLuint> cubeInd(lightIndices, lightIndices + sizeof(lightIndices) / sizeof(GLuint));
-	std::vector <Texture> cubeTex;// (instancedTextures, instancedTextures + sizeof(instancedTextures) / sizeof(Texture));
+	std::vector <Vertex> cubeVerts(instancedVertices, instancedVertices + sizeof(instancedVertices) / sizeof(Vertex));	
+	std::vector <GLuint> cubeInd(instancedIndices, instancedIndices + sizeof(instancedIndices) / sizeof(GLuint));
+	std::vector <Texture> cubeTex(instancedTextures, instancedTextures + sizeof(instancedTextures) / sizeof(Texture));
 
 	//glm::vec3 cubePosition = cubePos;
 	glm::vec3 cubeRotation = glm::vec3(0.0f);
@@ -316,11 +316,11 @@ int main()
 
 #pragma region Plank Draw
 
-		plank.SetMeshProperties(mainShader, camera, plankPosition, plankRotation, plankScale);
+		plank.SetMeshProperties(mainShader, camera, plankPosition, plankRot, plankScale);
 		plank.Draw(mainShader);
 
-		cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
-		cube.Draw(mainShader);
+		/*cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
+		cube.Draw(mainShader);*/
 
 #pragma endregion 
 
@@ -418,7 +418,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 		worldPos /= worldPos.w;
 
-		glm::vec3 finalPos = glm::vec3(worldPos.x, 0.5f, worldPos.z);
+		//glm::vec3 finalPos = glm::vec3(worldPos.x, worldPos.y, 0.5f);
+		glm::vec3 finalPos = glm::vec3(xNormalized, yNormalized, 0.5f);
 
 		// Add the new position to the deque and maintain the max capacity
 		if (cubePositions.size() >= MAX_CUBES) {
@@ -472,14 +473,14 @@ void ProcessInput(GLFWwindow* window)
 		glfwSetWindowShouldClose(window, true);
 	}
 
-	/*if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camera.ProcessKeyboard(FORWARD, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 		camera.ProcessKeyboard(BACKWARD, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 		camera.ProcessKeyboard(LEFT, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		camera.ProcessKeyboard(RIGHT, deltaTime);*/
+		camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
 void SetupLights(Shader& shader, Camera& camera)
@@ -490,7 +491,7 @@ void SetupLights(Shader& shader, Camera& camera)
 	shader.setFloat("material.shininess", 32.0f);
 
 	//Directional Light
-	shader.setVec3("dirLight.direction", 1.0f, -1.0f, 0.0f);
+	shader.setVec3("dirLight.direction", ambientDir);
 	shader.setVec3("dirLight.ambient", 0.25f, 0.25f, 0.25f);
 	shader.setVec3("dirLight.diffuse", 0.4f, 0.4f, 0.4f);
 	shader.setVec3("dirLight.specular", 0.5f, 0.5f, 0.5f);
@@ -565,6 +566,8 @@ void DrawImGuiWindow()
 	//Imgui Window
 	ImGui::Begin("Window, ImGui Window");
 	ImGui::DragFloat3("Position", &cubePos[0], 0.1f);
+	ImGui::DragFloat3("Plank Rotation", &plankRot[0], 0.1f);
+	ImGui::DragFloat3("Ambient light Dir", &ambientDir[0], 0.1f);
 	ImGui::End();
 
 	ImGui::Render();

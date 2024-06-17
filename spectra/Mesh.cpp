@@ -74,6 +74,11 @@ void Mesh::SetMeshProperties(Shader& shader, Camera& cam, glm::vec3& position, g
 	glm::mat4 meshMat = glm::mat4(1.0f);
 	Position = position;
 	meshMat = glm::translate(meshMat, position);	
+
+	meshMat = glm::rotate(meshMat, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f)); // Rotate around x-axis
+	meshMat = glm::rotate(meshMat, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f)); // Rotate around y-axis
+	meshMat = glm::rotate(meshMat, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f)); // Rotate around z-axis
+
 	meshMat = glm::scale(meshMat, scale);
 
 	shader.setMat4("model", meshMat);
