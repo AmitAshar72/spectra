@@ -5,6 +5,11 @@ glm::mat4 Camera::GetViewMatrix()
 	return glm::lookAt(Position, Position + Front, Up);
 }
 
+glm::mat4 Camera::GetProjectionMatrix()
+{
+	return glm::perspective(glm::radians(Zoom), (float)Width / (float)Height, NearPlane, FarPlane);
+}
+
 void Camera::ProcessKeyboard(Camera_Movement direction, float deltaTime)
 {
 	float velocity = MovementSpeed * deltaTime;
@@ -52,7 +57,7 @@ void Camera::UpdateCameraMatrix(Shader& shader)
 {
 	//Update Model, view and projection here
 	// pass projection matrix to shader (note that in this case it could change every frame)
-	glm::mat4 projection = glm::perspective(glm::radians(Zoom), (float)Width / (float)Height, NearPlane, FarPlane);
+	glm::mat4 projection = GetProjectionMatrix();
 	shader.setMat4("projection", projection);
 
 	// camera/view transformation

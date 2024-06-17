@@ -5,9 +5,15 @@
 #include "Mesh.h"
 #include <GLFW/glfw3.h>
 
+#include <filesystem>
+#include <iostream>
+#include <deque>
+namespace fs = std::filesystem;
+
 void InitWindow(); // Initial GLFW
 int InitGlad(); //Initialize Glad. Glad manages function pointers for OpenGL
 void Framebuffer_size_callback(GLFWwindow* window, int width, int height); //Callback function for when we resize the window
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos); //callback function for mouse inputs. Mouse X and Y 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset); // Callback function for mouse scroll
 void ProcessInput(GLFWwindow* window);
@@ -17,13 +23,15 @@ void ImGuiNewFrame();
 void DrawImGuiWindow();
 void DestroyImGuiWindow();
 
+std::string rootDir = (fs::current_path()).string();
+std::string textureDirectory = rootDir + "/Resources/Textures";
 
 //Screen dimensions
 const unsigned int SCR_WIDTH = 1600;
 const unsigned int SCR_LENGTH = 1200;
 
 //Camera object with initial pos
-Camera camera(glm::vec3(0.0f, 1.0f, 3.0f));
+Camera camera(glm::vec3(0.0f, 1.5f, 1.5f));
 
 //Mouse Inputs
 float lastX = SCR_WIDTH / 2.0;
@@ -36,11 +44,88 @@ float lastFrame = 0.0f; // Time of last frame
 
 // positions of the point lights
 glm::vec3 pointLightPositions[] = {
-	glm::vec3(9.95f,  2.1f,  -95.0f),
-	glm::vec3(-9.95f,  2.1f, -25.0f),
-	glm::vec3(9.95f,  2.1f, 25.0f),
-	glm::vec3(-9.95f,  2.1f, 95.0f)
+	glm::vec3(0.0f,  0.5f, -0.5f),
+	glm::vec3(0.75f,  0.0f, 0.0f),
+	glm::vec3(-0.75f,  0.0f, 0.0f),
+	glm::vec3(-9.95f,  0.5f, 0.0f)
 };
+
+// Vertices coordinates
+Vertex vertices[] =
+{
+	{glm::vec3(-1.0f, 0.0f,  1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+	{glm::vec3(-1.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+	{glm::vec3(1.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+	{glm::vec3(1.0f, 0.0f,  1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)}
+};
+
+// Indices for vertices order
+GLuint indices[] =
+{
+	2, 1, 0,
+	3, 2, 0
+};
+
+//Instanced cubes
+//Vertices of a cube with pos, normals, color and tex
+Vertex instancedVertices[] = {
+	// positions			  //Normals				// colors         // texture 
+//																		// coords
+	// Front face
+	{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+	{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+	{glm::vec3(0.5f, 0.5f, -0.5f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+	{glm::vec3(-0.5f, 0.5f, -0.5f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+	// Back face
+	{glm::vec3(-0.5f, -0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+	{glm::vec3(0.5f, -0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+	{glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+	{glm::vec3(-0.5f, 0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+	// Left face
+	{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+	{glm::vec3(-0.5f, 0.5f, -0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+	{glm::vec3(-0.5f, 0.5f, 0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+	{glm::vec3(-0.5f, -0.5f, 0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+	// Right face
+	{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+	{glm::vec3(0.5f, 0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+	{glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+	{glm::vec3(0.5f, -0.5f, 0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+	// Top face
+	{glm::vec3(-0.5f, 0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+	{glm::vec3(0.5f, 0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+	{glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+	{glm::vec3(-0.5f, 0.5f, 0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+	// Bottom face
+	{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+	{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+	{glm::vec3(0.5f, -0.5f, 0.5f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+	{glm::vec3(-0.5f, -0.5f, 0.5f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)}
+};
+
+//indices of the vertices defined above
+GLuint instancedIndices[] = 
+{  
+	// Front face
+		0, 1, 2,
+		2, 3, 0,
+		// Back face
+		4, 5, 6,
+		6, 7, 4,
+		// Left face
+		8, 9, 10,
+		10, 11, 8,
+		// Right face
+		12, 13, 14,
+		14, 15, 12,
+		// Top face
+		16, 17, 18,
+		18, 19, 16,
+		// Bottom face
+		20, 21, 22,
+		22, 23, 20
+};
+
 
 //Light Cube
 Vertex lightVertices[] =
@@ -83,8 +168,15 @@ GLuint lightIndices[] =
 	1, 4, 5
 };
 
+// Constants
+const int MAX_CUBES = 12;
+
+std::deque<glm::vec3> cubePositions;
+glm::vec3 cubePos = glm::vec3(-1.0f, 0.0f, 1.0f);
+
 int main() 
 {
+	
 	//Instantiate GLFW Window
 	InitWindow();
 
@@ -104,6 +196,8 @@ int main()
 
 	//On Window Resize, callback to update viewport
 	glfwSetFramebufferSizeCallback(window, Framebuffer_size_callback);
+	// Set mouse button callback
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
 	//On mouse movement, callback to update camera
 	glfwSetCursorPosCallback(window, mouse_callback);
 	//On scroll input, callback to update camera zoom (FOV)
@@ -122,6 +216,57 @@ int main()
 
 	camera.SetScreenDimensions(SCR_WIDTH, SCR_LENGTH);
 
+#pragma region Plank
+
+	Shader mainShader("VertexShader.vs", "FragmentShader.fs");
+
+	Texture textures[]
+	{
+		Texture(textureDirectory, "planks.png", "diffuse", 0, GL_UNSIGNED_BYTE),
+		Texture(textureDirectory, "planksSpec.png", "specular", 1, GL_UNSIGNED_BYTE)
+	};
+
+	// Store mesh data in vectors for the mesh
+	std::vector <Vertex> verts(vertices, vertices + sizeof(vertices) / sizeof(Vertex));
+	std::vector <GLuint> ind(indices, indices + sizeof(indices) / sizeof(GLuint));
+	std::vector <Texture> tex(textures, textures + sizeof(textures) / sizeof(Texture));
+
+	glm::vec3 plankPosition = glm::vec3(0.0f);
+	glm::vec3 plankRotation = glm::vec3(0.0f);
+	glm::vec3 plankScale = glm::vec3(1.0f);
+
+	Mesh plank(verts, ind, tex);
+
+	plank.UpdateBoundingBoxScale(plankScale);
+
+#pragma endregion
+
+#pragma region Instanced Cube
+
+	/*Texture instancedTextures[]
+	{
+		Texture(textureDirectory, "container2.png", "diffuse", 0, GL_UNSIGNED_BYTE),
+		Texture(textureDirectory, "container2_specular.png", "specular", 1, GL_UNSIGNED_BYTE)
+	};*/
+
+	// Store mesh data in vectors for the mesh
+	//std::vector <Vertex> cubeVerts(instancedVertices, instancedVertices + sizeof(instancedVertices) / sizeof(Vertex));	
+	std::vector <Vertex> cubeVerts(lightVertices, lightVertices + sizeof(lightVertices) / sizeof(Vertex));
+	//std::vector <GLuint> cubeInd(instancedIndices, instancedIndices + sizeof(instancedIndices) / sizeof(GLuint));
+	std::vector <GLuint> cubeInd(lightIndices, lightIndices + sizeof(lightIndices) / sizeof(GLuint));
+	std::vector <Texture> cubeTex;// (instancedTextures, instancedTextures + sizeof(instancedTextures) / sizeof(Texture));
+
+	//glm::vec3 cubePosition = cubePos;
+	glm::vec3 cubeRotation = glm::vec3(0.0f);
+	glm::vec3 cubeScale = glm::vec3(0.2f);
+
+	Mesh cube(cubeVerts, cubeInd, cubeTex);
+
+	cube.UpdateBoundingBoxScale(cubeScale);
+
+#pragma endregion
+
+
 #pragma region Light Cube
 	////Initialize Light Shader
 	Shader lightShader("LightShader.vs", "LightShader.fs");
@@ -133,16 +278,17 @@ int main()
 
 	//glm::vec3 lightPosition = glm::vec3(0.0f);
 	glm::vec3 lightRotation = glm::vec3(0.0f);
-	glm::vec3 lightScale = glm::vec3(0.2f);
+	glm::vec3 lightScale = glm::vec3(0.1f);
 
 	Mesh lightCube(lightVerts, lightInd, lightTex);
 
 	lightCube.UpdateBoundingBoxScale(lightScale);
 
-#pragma endregion Light Cube
+#pragma endregion
 
 	//Set Light Color, the value is fed into LightShader.fs
 	glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+	glm::vec3 instancedCubeColor = glm::vec3(0.5f, 1.0f, 0.75f);
 
 	//ImGui
 	InitImGui(window);
@@ -163,6 +309,21 @@ int main()
 
 		ImGuiNewFrame();		
 
+
+		//Setup lights
+
+		SetupLights(mainShader, camera);
+
+#pragma region Plank Draw
+
+		plank.SetMeshProperties(mainShader, camera, plankPosition, plankRotation, plankScale);
+		plank.Draw(mainShader);
+
+		cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
+		cube.Draw(mainShader);
+
+#pragma endregion 
+
 #pragma region Light Cube draw
 
 		for (unsigned int i = 0; i < 4; i++)
@@ -174,8 +335,21 @@ int main()
 			lightCube.SetMeshProperties(lightShader, camera, pointLightPositions[i], lightRotation, lightScale);
 			lightShader.setVec3("lightColor", lightColor);
 			lightCube.Draw(lightShader);
-		}
+		}	
+
 #pragma endregion
+
+
+
+#pragma region Instanced Cube Draw
+
+		for (int i = 0; i < cubePositions.size(); i++)
+		{
+			cube.SetMeshProperties(mainShader, camera, cubePositions[i], cubeRotation, cubeScale);
+			cube.Draw(mainShader);
+		}
+
+#pragma endregion 
 
 		DrawImGuiWindow();
 
@@ -187,6 +361,7 @@ int main()
 	// optional: de-allocate all resources once they've outlived their purpose:
 	// ------------------------------------------------------------------------
 
+	mainShader.Delete();
 	lightShader.Delete();
 
 	DestroyImGuiWindow();
@@ -218,6 +393,47 @@ void Framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, width, height);
 	camera.SetScreenDimensions(width, height);
+}
+
+// Callback function for mouse button press
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+		double xpos, ypos;
+		glfwGetCursorPos(window, &xpos, &ypos);
+
+		int width, height;
+		glfwGetWindowSize(window, &width, &height);
+
+		float xNormalized = (xpos / width) * 2.0f - 1.0f;
+		float yNormalized = 1.0f - (ypos / height) * 2.0f;
+
+		// Camera and Projection settings
+		glm::mat4 projection = camera.GetProjectionMatrix();
+		glm::mat4 view = camera.GetViewMatrix();
+
+		glm::mat4 invVP = glm::inverse(projection * view);
+
+		glm::vec4 screenPos = glm::vec4(xNormalized, yNormalized, 0.5f, 1.0f);
+		glm::vec4 worldPos = invVP * screenPos;
+
+		worldPos /= worldPos.w;
+
+		glm::vec3 finalPos = glm::vec3(worldPos.x, 0.5f, worldPos.z);
+
+		// Add the new position to the deque and maintain the max capacity
+		if (cubePositions.size() >= MAX_CUBES) {
+			cubePositions.pop_front();
+		}
+
+		cubePositions.push_back(finalPos);
+	}
+
+	for (unsigned int i = 0; i < cubePositions.size(); ++i)
+	{
+		std::cout << cubePositions[i].x << ", " << cubePositions[i].y << ", " << cubePositions[i].z << std::endl;
+	}
+
+	std::cout << cubePositions.size() << std::endl;
 }
 
 // glfw: whenever the mouse moves, this callback is called
@@ -255,6 +471,15 @@ void ProcessInput(GLFWwindow* window)
 	{
 		glfwSetWindowShouldClose(window, true);
 	}
+
+	/*if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		camera.ProcessKeyboard(FORWARD, deltaTime);
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		camera.ProcessKeyboard(BACKWARD, deltaTime);
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		camera.ProcessKeyboard(LEFT, deltaTime);
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		camera.ProcessKeyboard(RIGHT, deltaTime);*/
 }
 
 void SetupLights(Shader& shader, Camera& camera)
@@ -339,6 +564,7 @@ void DrawImGuiWindow()
 {
 	//Imgui Window
 	ImGui::Begin("Window, ImGui Window");
+	ImGui::DragFloat3("Position", &cubePos[0], 0.1f);
 	ImGui::End();
 
 	ImGui::Render();

@@ -16,7 +16,7 @@ enum Camera_Movement {
 
 // Default camera values
 const float YAW = -90.0f;
-const float PITCH = -15.0f;
+const float PITCH = -45.0f;
 const float SPEED = 7.5f;
 const float SENSITIVITY = 0.1f;
 const float ZOOM = 45.0f;
@@ -69,6 +69,8 @@ class Camera
 		}
 		
 		glm::mat4 GetViewMatrix();
+		glm::mat4 GetProjectionMatrix();
+
 		void ProcessKeyboard(Camera_Movement direction, float deltaTime);
 		void ProcessMouseMovement(float xoffset, float yoffset, GLboolean constrainPitch = true);
 		void ProcessMouseScroll(float yoffset);
