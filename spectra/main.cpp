@@ -4,6 +4,7 @@
 
 #include "Mesh.h"
 #include <GLFW/glfw3.h>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <filesystem>
 #include <iostream>
@@ -170,11 +171,19 @@ GLuint lightIndices[] =
 
 // Constants
 const int MAX_CUBES = 12;
+const int MAX_POINTLIGHTS = 4;
 
 std::deque<glm::vec3> cubePositions;
-glm::vec3 cubePos = glm::vec3(-1.0f, 0.0f, 1.0f);
-glm::vec3 plankRot = glm::vec3(90.0f, 0.0f, 0.0f);
 glm::vec3 ambientDir = glm::vec3(1.0f, -1.0f, 0.0f);
+
+class pointLight 
+{
+public:
+	glm::vec3 Position = glm::vec3(0.0f);
+	glm::vec3 Color = glm::vec3(0.250f);
+};
+
+std::deque<pointLight> pointLights;
 
 int main() 
 {
@@ -221,7 +230,7 @@ int main()
 #pragma region Plank
 
 	Shader mainShader("VertexShader.vs", "FragmentShader.fs");
-
+	mainShader.setInt("num_pointLights", 0);
 	Texture textures[]
 	{
 		Texture(textureDirectory, "planks.png", "diffuse", 0, GL_UNSIGNED_BYTE),
@@ -234,7 +243,7 @@ int main()
 	std::vector <Texture> tex(textures, textures + sizeof(textures) / sizeof(Texture));
 
 	glm::vec3 plankPosition = glm::vec3(0.0f);
-	glm::vec3 plankRotation = glm::vec3(-90.0f);
+	glm::vec3 plankRotation = glm::vec3(90.0f, 0.0f, 0.0f);;
 	glm::vec3 plankScale = glm::vec3(1.0f);
 
 	Mesh plank(verts, ind, tex);
@@ -316,7 +325,7 @@ int main()
 
 #pragma region Plank Draw
 
-		plank.SetMeshProperties(mainShader, camera, plankPosition, plankRot, plankScale);
+		plank.SetMeshProperties(mainShader, camera, plankPosition, plankRotation, plankScale);
 		plank.Draw(mainShader);
 
 		/*cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
@@ -326,14 +335,16 @@ int main()
 
 #pragma region Light Cube draw
 
-		for (unsigned int i = 0; i < 4; i++)
+
+		mainShader.setInt("num_pointLights", pointLights.size());
+		for (unsigned int i = 0; i < pointLights.size(); i++)
 		{
 			glm::mat4 lightModel = glm::mat4(1.0f);
 
 			/*pointLightPositions[i].x = radius * cos(speed * currentFrame);
 			pointLightPositions[i].y = radius * sin(speed * currentFrame);*/
-			lightCube.SetMeshProperties(lightShader, camera, pointLightPositions[i], lightRotation, lightScale);
-			lightShader.setVec3("lightColor", lightColor);
+			lightCube.SetMeshProperties(lightShader, camera, pointLights[i].Position, lightRotation, lightScale);
+			lightShader.setVec3("lightColor", pointLights[i].Color);
 			lightCube.Draw(lightShader);
 		}	
 
@@ -407,18 +418,6 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		float xNormalized = (xpos / width) * 2.0f - 1.0f;
 		float yNormalized = 1.0f - (ypos / height) * 2.0f;
 
-		// Camera and Projection settings
-		glm::mat4 projection = camera.GetProjectionMatrix();
-		glm::mat4 view = camera.GetViewMatrix();
-
-		glm::mat4 invVP = glm::inverse(projection * view);
-
-		glm::vec4 screenPos = glm::vec4(xNormalized, yNormalized, 0.5f, 1.0f);
-		glm::vec4 worldPos = invVP * screenPos;
-
-		worldPos /= worldPos.w;
-
-		//glm::vec3 finalPos = glm::vec3(worldPos.x, worldPos.y, 0.5f);
 		glm::vec3 finalPos = glm::vec3(xNormalized, yNormalized, 0.5f);
 
 		// Add the new position to the deque and maintain the max capacity
@@ -429,12 +428,29 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		cubePositions.push_back(finalPos);
 	}
 
-	for (unsigned int i = 0; i < cubePositions.size(); ++i)
-	{
-		std::cout << cubePositions[i].x << ", " << cubePositions[i].y << ", " << cubePositions[i].z << std::endl;
-	}
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
+		double xpos, ypos;
+		glfwGetCursorPos(window, &xpos, &ypos);
 
-	std::cout << cubePositions.size() << std::endl;
+		int width, height;
+		glfwGetWindowSize(window, &width, &height);
+
+		float xNormalized = (xpos / width) * 2.0f - 1.0f;
+		float yNormalized = 1.0f - (ypos / height) * 2.0f;
+
+		glm::vec3 finalPos = glm::vec3(xNormalized, yNormalized, 0.5f);
+
+		// Add the new position to the deque and maintain the max capacity
+		if (pointLights.size() >= MAX_POINTLIGHTS) {
+			pointLights.pop_front();
+		}
+
+		pointLight p;
+		p.Color = glm::vec3(1.0f);
+		p.Position = finalPos;
+
+		pointLights.push_back(p);
+	}
 }
 
 // glfw: whenever the mouse moves, this callback is called
@@ -496,38 +512,28 @@ void SetupLights(Shader& shader, Camera& camera)
 	shader.setVec3("dirLight.diffuse", 0.4f, 0.4f, 0.4f);
 	shader.setVec3("dirLight.specular", 0.5f, 0.5f, 0.5f);
 
-	// point light 1
-	shader.setVec3("pointLights[0].position", pointLightPositions[0]);
-	shader.setVec3("pointLights[0].ambient", 0.05f, 0.05f, 0.05f);
-	shader.setVec3("pointLights[0].diffuse", 0.8f, 0.8f, 0.8f);
-	shader.setVec3("pointLights[0].specular", 1.0f, 1.0f, 1.0f);
-	shader.setFloat("pointLights[0].constant", 1.0f);
-	shader.setFloat("pointLights[0].linear", 0.09f);
-	shader.setFloat("pointLights[0].quadratic", 0.032f);
-	// point light 2
-	shader.setVec3("pointLights[1].position", pointLightPositions[1]);
-	shader.setVec3("pointLights[1].ambient", 0.05f, 0.05f, 0.05f);
-	shader.setVec3("pointLights[1].diffuse", 0.8f, 0.8f, 0.8f);
-	shader.setVec3("pointLights[1].specular", 1.0f, 1.0f, 1.0f);
-	shader.setFloat("pointLights[1].constant", 1.0f);
-	shader.setFloat("pointLights[1].linear", 0.09f);
-	shader.setFloat("pointLights[1].quadratic", 0.032f);
-	// point light 3
-	shader.setVec3("pointLights[2].position", pointLightPositions[2]);
-	shader.setVec3("pointLights[2].ambient", 0.05f, 0.05f, 0.05f);
-	shader.setVec3("pointLights[2].diffuse", 0.8f, 0.8f, 0.8f);
-	shader.setVec3("pointLights[2].specular", 1.0f, 1.0f, 1.0f);
-	shader.setFloat("pointLights[2].constant", 1.0f);
-	shader.setFloat("pointLights[2].linear", 0.09f);
-	shader.setFloat("pointLights[2].quadratic", 0.032f);
-	// point light 4
-	shader.setVec3("pointLights[3].position", pointLightPositions[3]);
-	shader.setVec3("pointLights[3].ambient", 0.05f, 0.05f, 0.05f);
-	shader.setVec3("pointLights[3].diffuse", 0.8f, 0.8f, 0.8f);
-	shader.setVec3("pointLights[3].specular", 1.0f, 1.0f, 1.0f);
-	shader.setFloat("pointLights[3].constant", 1.0f);
-	shader.setFloat("pointLights[3].linear", 0.09f);
-	shader.setFloat("pointLights[3].quadratic", 0.032f);
+	for (int i = 0; i < pointLights.size(); ++i) 
+	{
+		shader.setVec3("pointLights[" + std::to_string(i) + "].position", pointLights[i].Position);
+		shader.setVec3("pointLights[" + std::to_string(i) + "].ambient", 0.05f, 0.05f, 0.05f);
+		shader.setVec3("pointLights[" + std::to_string(i) + "].diffuse", pointLights[i].Color);
+		shader.setVec3("pointLights[" + std::to_string(i) + "].specular", 1.0f, 1.0f, 1.0f);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].constant", 1.0f);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].linear", 0.09f);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].quadratic", 0.032f);
+	}
+
+	/*for (int i = 0; i < 4; ++i)
+	{
+		shader.setVec3("pointLights[" + std::to_string(i) + "].position", pointLightPositions[i]);
+		shader.setVec3("pointLights[" + std::to_string(i) + "].ambient", 0.05f, 0.05f, 0.05f);
+		shader.setVec3("pointLights[" + std::to_string(i) + "].diffuse", 0.8f, 0.8f, 0.8f);
+		shader.setVec3("pointLights[" + std::to_string(i) + "].specular", 1.0f, 1.0f, 1.0f);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].constant", 1.0f);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].linear", 0.09f);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].quadratic", 0.032f);
+	}*/
+
 	// spotLight
 	shader.setVec3("spotLight.position", camera.Position);
 	shader.setVec3("spotLight.direction", camera.Front);
@@ -565,9 +571,19 @@ void DrawImGuiWindow()
 {
 	//Imgui Window
 	ImGui::Begin("Window, ImGui Window");
-	ImGui::DragFloat3("Position", &cubePos[0], 0.1f);
-	ImGui::DragFloat3("Plank Rotation", &plankRot[0], 0.1f);
 	ImGui::DragFloat3("Ambient light Dir", &ambientDir[0], 0.1f);
+
+	for (int i = 0; i < pointLights.size(); ++i) 
+	{
+		std::string label = "Point Light " + std::to_string(i + 1);
+
+		if (ImGui::CollapsingHeader(label.c_str()))
+		{
+			ImGui::DragFloat3("Position ", glm::value_ptr(pointLights[i].Position), 0.1f);
+			ImGui::ColorEdit3("Color ", glm::value_ptr(pointLights[i].Color), 0.1f);
+		}		
+	}
+
 	ImGui::End();
 
 	ImGui::Render();

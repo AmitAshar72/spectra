@@ -65,7 +65,8 @@ uniform Material material;
 uniform sampler2D diffuse0; 
 uniform sampler2D specular0; 
 
-
+//Total Point Lights
+uniform int num_pointLights;
 
 vec3 CalculateDirectionLights(DirectionLight light, vec3 normal, vec3 viewDir);
 vec3 CalculatePointLights(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
@@ -96,7 +97,7 @@ void main()
     vec3 result = CalculateDirectionLights(dirLight, norm, viewDir);
     
     //Point Lights 
-    for(int i = 0; i < NR_POINT_LIGHTS; ++i)
+    for(int i = 0; i < num_pointLights; ++i)
     {
         result += CalculatePointLights(pointLights[i],norm, FragPos, viewDir);
     }
