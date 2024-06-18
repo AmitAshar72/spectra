@@ -106,24 +106,24 @@ Vertex instancedVertices[] = {
 //indices of the vertices defined above
 GLuint instancedIndices[] = 
 {  
+	// Back face
+	0, 2, 1,
+	2, 0, 3,
 	// Front face
-		0, 1, 2,
-		2, 3, 0,
-		// Back face
-		4, 5, 6,
-		6, 7, 4,
-		// Left face
-		8, 9, 10,
-		10, 11, 8,
-		// Right face
-		12, 13, 14,
-		14, 15, 12,
-		// Top face
-		16, 17, 18,
-		18, 19, 16,
-		// Bottom face
-		20, 21, 22,
-		22, 23, 20
+	4, 5, 6,
+	6, 7, 4,
+	// Left face
+	8, 10, 9,
+	10, 8, 11,
+	// Right face
+	12, 13, 14,
+	14, 15, 12,
+	// Top face
+	16, 18, 17,
+	18, 16, 19,
+	// Bottom face
+	20, 21, 22,
+	22, 23, 20
 };
 
 
