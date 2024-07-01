@@ -176,14 +176,14 @@ const int MAX_POINTLIGHTS = 4;
 std::deque<glm::vec3> cubePositions;
 glm::vec3 ambientDir = glm::vec3(1.0f, -1.0f, 0.0f);
 
-class pointLight 
+class PointLight 
 {
 public:
 	glm::vec3 Position = glm::vec3(0.0f);
 	glm::vec3 Color = glm::vec3(0.250f);
 };
 
-std::deque<pointLight> pointLights;
+std::deque<PointLight> pointLights;
 
 int main() 
 {
@@ -407,7 +407,14 @@ void Framebuffer_size_callback(GLFWwindow* window, int width, int height)
 }
 
 // Callback function for mouse button press
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) 
+{
+	if (ImGui::GetIO().WantCaptureMouse) 
+	{
+		// ImGui is handling the mouse input, don't process it in the game
+		return;
+	}
+
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
 		double xpos, ypos;
 		glfwGetCursorPos(window, &xpos, &ypos);
@@ -445,7 +452,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			pointLights.pop_front();
 		}
 
-		pointLight p;
+		PointLight p;
 		p.Color = glm::vec3(1.0f);
 		p.Position = finalPos;
 
@@ -457,6 +464,12 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 // -------------------------------------------------------
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
+	if (ImGui::GetIO().WantCaptureMouse)
+	{
+		// ImGui is handling the mouse input, don't process it in the game
+		return;
+	}
+
 	float xpos = static_cast<float>(xposIn);
 	float ypos = static_cast<float>(yposIn);
 
@@ -479,6 +492,12 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 // ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
+	if (ImGui::GetIO().WantCaptureMouse)
+	{
+		// ImGui is handling the mouse input, don't process it in the game
+		return;
+	}
+
 	camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
@@ -575,12 +594,15 @@ void DrawImGuiWindow()
 
 	for (int i = 0; i < pointLights.size(); ++i) 
 	{
-		std::string label = "Point Light " + std::to_string(i + 1);
+		std::string label = "Point Light " + std::to_string(i + 1);	
 
-		if (ImGui::CollapsingHeader(label.c_str()))
+		if (ImGui::CollapsingHeader(label.c_str())) 
 		{
-			ImGui::DragFloat3("Position ", glm::value_ptr(pointLights[i].Position), 0.1f);
-			ImGui::ColorEdit3("Color ", glm::value_ptr(pointLights[i].Color), 0.1f);
+			PointLight& light = pointLights[i];
+			ImGui::PushID(i);
+			ImGui::SliderFloat3("Position", &light.Position.x, -10, 10);
+			ImGui::ColorEdit3("Color", &light.Color.x);
+			ImGui::PopID();
 		}		
 	}
 
