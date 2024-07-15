@@ -541,7 +541,23 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		float xNormalized = (xpos / width) * 2.0f - 1.0f;
 		float yNormalized = 1.0f - (ypos / height) * 2.0f;
 
-		glm::vec3 finalPos = glm::vec3(xNormalized, yNormalized, 0.5f);
+		// Get the view and projection matrices
+		glm::mat4 view = camera.GetViewMatrix();
+		glm::mat4 projection = camera.GetProjectionMatrix();
+
+		// Calculate the inverse of the view-projection matrix
+		glm::mat4 viewProjectionInverse = glm::inverse(projection * view);
+
+		// Create a NDC coordinate with z set to 0.0 for near plane or 1.0 for far plane
+		glm::vec4 screenPos = glm::vec4(xNormalized, yNormalized, 0.9f, 1.0f);
+
+		// Transform NDC to world coordinates
+		glm::vec4 worldPos = viewProjectionInverse * screenPos;
+
+		// Perform perspective divide (important step)
+		worldPos /= worldPos.w;
+
+		glm::vec3 finalPos = glm::vec3(worldPos);
 
 		// Add the new position to the deque and maintain the max capacity
 		if (cubePositions.size() >= MAX_CUBES) {
@@ -561,7 +577,23 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		float xNormalized = (xpos / width) * 2.0f - 1.0f;
 		float yNormalized = 1.0f - (ypos / height) * 2.0f;
 
-		glm::vec3 finalPos = glm::vec3(xNormalized, yNormalized, 0.5f);
+		// Get the view and projection matrices
+		glm::mat4 view = camera.GetViewMatrix();
+		glm::mat4 projection = camera.GetProjectionMatrix();
+
+		// Calculate the inverse of the view-projection matrix
+		glm::mat4 viewProjectionInverse = glm::inverse(projection * view);
+
+		// Create a NDC coordinate with z set to 0.0 for near plane or 1.0 for far plane
+		glm::vec4 screenPos = glm::vec4(xNormalized, yNormalized, 0.9f, 1.0f);
+
+		// Transform NDC to world coordinates
+		glm::vec4 worldPos = viewProjectionInverse * screenPos;
+
+		// Perform perspective divide (important step)
+		worldPos /= worldPos.w;
+
+		glm::vec3 finalPos = glm::vec3(worldPos);
 
 		// Add the new position to the deque and maintain the max capacity
 		if (pointLights.size() >= MAX_POINTLIGHTS) {
@@ -586,22 +618,26 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 		return;
 	}
 
-	float xpos = static_cast<float>(xposIn);
-	float ypos = static_cast<float>(yposIn);
-
-	if (firstMouse)
+	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
 	{
+		float xpos = static_cast<float>(xposIn);
+		float ypos = static_cast<float>(yposIn);
+
+		if (firstMouse)
+		{
+			lastX = xpos;
+			lastY = ypos;
+			firstMouse = false;
+		}
+
+		float xoffset = xpos - lastX;
+		float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
 		lastX = xpos;
 		lastY = ypos;
-		firstMouse = false;
+
+		camera.ProcessMouseMovement(xoffset, yoffset);
 	}
-
-	float xoffset = xpos - lastX;
-	float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-	lastX = xpos;
-	lastY = ypos;
-
-	//camera.ProcessMouseMovement(xoffset, yoffset);
+	
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
