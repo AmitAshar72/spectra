@@ -24,12 +24,12 @@ void ImGuiNewFrame();
 void DrawImGuiWindow();
 void DestroyImGuiWindow();
 
-std::string rootDir = (fs::current_path()).string();
-std::string textureDirectory = rootDir + "/Resources/Textures";
+std::string rootDir = "D:\\Repositories\\spectra\\spectra";
+std::string textureDirectory = rootDir + "\\Resources\\Textures";
 
 //Screen dimensions
-const unsigned int SCR_WIDTH = 1600;
-const unsigned int SCR_LENGTH = 1200;
+const unsigned int SCR_WIDTH = 1280;
+const unsigned int SCR_LENGTH = 720;
 
 //Camera object with initial pos
 Camera camera(glm::vec3(0.0f, 0.0f, 2.0f));
@@ -174,7 +174,8 @@ const int MAX_CUBES = 12;
 const int MAX_POINTLIGHTS = 4;
 
 std::deque<glm::vec3> cubePositions;
-glm::vec3 ambientDir = glm::vec3(1.0f, -1.0f, 0.0f);
+glm::vec3 ambientDir = glm::vec3(1.0f, -1.0f, 1.0f);
+glm::vec3 lightPos = glm::vec3(1.0f, -1.7f, 3.0f);
 
 class PointLight 
 {
@@ -227,9 +228,22 @@ int main()
 
 	camera.SetScreenDimensions(SCR_WIDTH, SCR_LENGTH);
 
+#pragma region Init Shaders
+
+	std::string vs = "\\VertexShader.vs";
+	std::string fs = "\\FragmentShader.fs";
+	std::string l_vs = "\\LightShader.vs";
+	std::string l_fs = "\\LightShader.fs";
+	std::string depth_vs = "\\ShadowDepthVertShader.vs";
+	std::string depth_fs = "\\ShadowDepthFragShader.fs";
+
+	Shader mainShader((rootDir + vs).c_str(), (rootDir + fs).c_str());
+	Shader lightShader((rootDir + l_vs).c_str(), (rootDir + l_fs).c_str());
+	Shader depthShader((rootDir + depth_vs).c_str(), (rootDir + depth_fs).c_str());
+#pragma endregion
+
 #pragma region Plank
 
-	Shader mainShader("VertexShader.vs", "FragmentShader.fs");
 	mainShader.setInt("num_pointLights", 0);
 	Texture textures[]
 	{
@@ -275,11 +289,8 @@ int main()
 
 #pragma endregion
 
-
 #pragma region Light Cube
-	////Initialize Light Shader
-	Shader lightShader("LightShader.vs", "LightShader.fs");
-
+	
 	// Store mesh data in vectors for the mesh
 	std::vector <Vertex> lightVerts(lightVertices, lightVertices + sizeof(lightVertices) / sizeof(Vertex));
 	std::vector <GLuint> lightInd(lightIndices, lightIndices + sizeof(lightIndices) / sizeof(GLuint));
@@ -292,6 +303,36 @@ int main()
 	Mesh lightCube(lightVerts, lightInd, lightTex);
 
 	lightCube.UpdateBoundingBoxScale(lightScale);
+
+#pragma endregion	
+
+#pragma region Shadow Map
+	GLuint depthMapFBO;
+	glGenFramebuffers(1, &depthMapFBO);
+
+	
+
+	GLuint shadowMap;
+	glGenTextures(1, &shadowMap);
+	glBindTexture(GL_TEXTURE_2D, shadowMap);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+
+	// Always check that our framebuffer is ok
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		return false;
+
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	
 
 #pragma endregion
 
@@ -320,9 +361,83 @@ int main()
 
 
 		//Setup lights
-
 		SetupLights(mainShader, camera);
 
+
+
+		// 1. render depth of scene to texture (from light's perspective)
+		// --------------------------------------------------------------
+		glm::mat4 lightProjection, lightView;
+		glm::mat4 lightSpaceMatrix;
+		float near_plane = 1.0f, far_plane = 25.0f;
+		//lightProjection = glm::perspective(glm::radians(45.0f), (GLfloat)SHADOW_WIDTH / (GLfloat)SHADOW_HEIGHT, near_plane, far_plane); // note that if you use a perspective projection matrix you'll have to change the light position as the current light position isn't enough to reflect the whole scene
+		lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+		lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
+		lightSpaceMatrix = lightProjection * lightView;
+		// render scene from light's point of view
+		depthShader.Activate();
+		depthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+
+		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+		glClear(GL_DEPTH_BUFFER_BIT);
+
+#pragma region Scene Objects
+#pragma region Plank Draw
+
+		plank.SetMeshProperties(depthShader, camera, plankPosition, plankRotation, plankScale);
+		plank.Draw(depthShader);
+
+		/*cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
+		cube.Draw(mainShader);*/
+
+#pragma endregion 
+
+#pragma region Light Cube draw
+
+
+		mainShader.setInt("num_pointLights", pointLights.size());
+		for (unsigned int i = 0; i < pointLights.size(); i++)
+		{
+			glm::mat4 lightModel = glm::mat4(1.0f);
+
+			/*pointLightPositions[i].x = radius * cos(speed * currentFrame);
+			pointLightPositions[i].y = radius * sin(speed * currentFrame);*/
+			lightCube.SetMeshProperties(lightShader, camera, pointLights[i].Position, lightRotation, lightScale);
+			lightShader.setVec3("lightColor", pointLights[i].Color);
+			lightCube.Draw(lightShader);
+		}
+
+#pragma endregion
+
+#pragma region Instanced Cube Draw
+
+		for (int i = 0; i < cubePositions.size(); i++)
+		{
+			cube.SetMeshProperties(depthShader, camera, cubePositions[i], cubeRotation, cubeScale);
+			cube.Draw(depthShader);
+		}
+
+#pragma endregion 
+#pragma endregion
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// reset viewport
+		glViewport(0, 0, SCR_WIDTH, SCR_LENGTH);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// 2. render scene as normal using the generated depth/shadow map  
+		// --------------------------------------------------------------
+		mainShader.Activate();		
+		mainShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+
+		mainShader.Activate();
+		glActiveTexture(GL_TEXTURE0 + 2);
+		glBindTexture(GL_TEXTURE_2D, shadowMap);
+		mainShader.setInt("shadowMap", 2);
+
+#pragma region Scene Objects
 #pragma region Plank Draw
 
 		plank.SetMeshProperties(mainShader, camera, plankPosition, plankRotation, plankScale);
@@ -346,11 +461,9 @@ int main()
 			lightCube.SetMeshProperties(lightShader, camera, pointLights[i].Position, lightRotation, lightScale);
 			lightShader.setVec3("lightColor", pointLights[i].Color);
 			lightCube.Draw(lightShader);
-		}	
+		}
 
 #pragma endregion
-
-
 
 #pragma region Instanced Cube Draw
 
@@ -361,6 +474,8 @@ int main()
 		}
 
 #pragma endregion 
+#pragma endregion
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		DrawImGuiWindow();
 
@@ -374,6 +489,7 @@ int main()
 
 	mainShader.Delete();
 	lightShader.Delete();
+	depthShader.Delete();
 
 	DestroyImGuiWindow();
 
@@ -527,7 +643,7 @@ void SetupLights(Shader& shader, Camera& camera)
 
 	//Directional Light
 	shader.setVec3("dirLight.direction", ambientDir);
-	shader.setVec3("dirLight.ambient", 0.25f, 0.25f, 0.25f);
+	shader.setVec3("dirLight.ambient", 0.5f, 0.5f, 0.5f);
 	shader.setVec3("dirLight.diffuse", 0.4f, 0.4f, 0.4f);
 	shader.setVec3("dirLight.specular", 0.5f, 0.5f, 0.5f);
 
@@ -591,6 +707,7 @@ void DrawImGuiWindow()
 	//Imgui Window
 	ImGui::Begin("Window, ImGui Window");
 	ImGui::DragFloat3("Ambient light Dir", &ambientDir[0], 0.1f);
+	ImGui::DragFloat3("Ambient light Pos", &lightPos[0], 0.1f);
 
 	for (int i = 0; i < pointLights.size(); ++i) 
 	{

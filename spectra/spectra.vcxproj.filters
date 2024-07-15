@@ -148,5 +148,11 @@
     <None Include="VertexShader.vs">
       <Filter>Resource Files\Shaders</Filter>
     </None>
+    <None Include="ShadowDepthFragShader.fs">
+      <Filter>Resource Files\Shaders</Filter>
+    </None>
+    <None Include="ShadowDepthVertShader.vs">
+      <Filter>Resource Files\Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
