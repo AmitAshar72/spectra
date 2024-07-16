@@ -32,7 +32,7 @@ const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_LENGTH = 720;
 
 //Camera object with initial pos
-Camera camera(glm::vec3(0.0f, 0.0f, 2.0f));
+Camera camera(glm::vec3(0.0f, 2.0f, 0.0f));
 
 //Mouse Inputs
 float lastX = SCR_WIDTH / 2.0;
@@ -175,7 +175,7 @@ const int MAX_POINTLIGHTS = 4;
 
 std::deque<glm::vec3> cubePositions;
 glm::vec3 ambientDir = glm::vec3(1.0f, -1.0f, 1.0f);
-glm::vec3 lightPos = glm::vec3(1.0f, -1.7f, 3.0f);
+glm::vec3 lightPos = glm::vec3(1.0f, 2.0f, -0.5f);
 
 class PointLight 
 {
@@ -185,6 +185,8 @@ public:
 };
 
 std::deque<PointLight> pointLights;
+const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
+
 
 int main() 
 {
@@ -257,7 +259,7 @@ int main()
 	std::vector <Texture> tex(textures, textures + sizeof(textures) / sizeof(Texture));
 
 	glm::vec3 plankPosition = glm::vec3(0.0f);
-	glm::vec3 plankRotation = glm::vec3(90.0f, 0.0f, 0.0f);;
+	glm::vec3 plankRotation = glm::vec3(0.0f, 0.0f, 0.0f);;
 	glm::vec3 plankScale = glm::vec3(1.0f);
 
 	Mesh plank(verts, ind, tex);

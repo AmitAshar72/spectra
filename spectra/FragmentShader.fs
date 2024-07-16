@@ -108,7 +108,7 @@ void main()
     }
 
     //Spot Light
-    result += CalculateSpotLights(spotLight,norm, FragPos, viewDir, FragPosLightSpace);    
+    //result += CalculateSpotLights(spotLight,norm, FragPos, viewDir, FragPosLightSpace);    
         
     // Shadow calculation
     float shadow = ShadowCalculation(FragPosLightSpace, norm, -dirLight.direction);
