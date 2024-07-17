@@ -23,6 +23,8 @@ void InitImGui(GLFWwindow* window);
 void ImGuiNewFrame();
 void DrawImGuiWindow();
 void DestroyImGuiWindow();
+void RenderScene(Shader& shader,Mesh plank, Mesh cube);
+void RenderLightObj(Shader& lightShader, Mesh lightCube);
 
 std::string rootDir = "D:\\Repositories\\spectra\\spectra";
 std::string textureDirectory = rootDir + "\\Resources\\Textures";
@@ -171,7 +173,7 @@ GLuint lightIndices[] =
 
 // Constants
 const int MAX_CUBES = 12;
-const int MAX_POINTLIGHTS = 4;
+const int MAX_POINTLIGHTS = 1;
 
 std::deque<glm::vec3> cubePositions;
 glm::vec3 ambientDir = glm::vec3(1.0f, -1.0f, 1.0f);
@@ -182,11 +184,23 @@ class PointLight
 public:
 	glm::vec3 Position = glm::vec3(0.0f);
 	glm::vec3 Color = glm::vec3(0.250f);
+	float constant = 1.0f;
+	float linear = 0.09f;
+	float quadratic = 0.032f;
 };
 
 std::deque<PointLight> pointLights;
 const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
 
+glm::vec3 plankPosition = glm::vec3(0.0f);
+glm::vec3 plankRotation = glm::vec3(0.0f, 0.0f, 0.0f);;
+glm::vec3 plankScale = glm::vec3(1.0f);
+//glm::vec3 cubePosition = cubePos;
+glm::vec3 cubeRotation = glm::vec3(0.0f);
+glm::vec3 cubeScale = glm::vec3(0.2f);
+//glm::vec3 lightPosition = glm::vec3(0.0f);
+glm::vec3 lightRotation = glm::vec3(0.0f);
+glm::vec3 lightScale = glm::vec3(0.1f);
 
 int main() 
 {
@@ -236,12 +250,18 @@ int main()
 	std::string fs = "\\FragmentShader.fs";
 	std::string l_vs = "\\LightShader.vs";
 	std::string l_fs = "\\LightShader.fs";
-	std::string depth_vs = "\\ShadowDepthVertShader.vs";
+	std::string depth_vs = "\\ShadowDepthVertShader.vs";	
 	std::string depth_fs = "\\ShadowDepthFragShader.fs";
+	std::string point_depth_vs = "\\PointLightShadowDepthVS.vs";
+	std::string point_depth_fs = "\\PointLightShadowDepthFS.fs";
+	std::string point_depth_gs = "\\PointLightShadowDepthGS.gs";
 
 	Shader mainShader((rootDir + vs).c_str(), (rootDir + fs).c_str());
 	Shader lightShader((rootDir + l_vs).c_str(), (rootDir + l_fs).c_str());
+	//Dir Light Shadow Shader
 	Shader depthShader((rootDir + depth_vs).c_str(), (rootDir + depth_fs).c_str());
+	//Point Light Shadow Shader
+	Shader simpleDepthShader((rootDir + point_depth_vs).c_str(), (rootDir + point_depth_fs).c_str(), (rootDir + point_depth_gs).c_str());
 #pragma endregion
 
 #pragma region Plank
@@ -257,11 +277,7 @@ int main()
 	std::vector <Vertex> verts(vertices, vertices + sizeof(vertices) / sizeof(Vertex));
 	std::vector <GLuint> ind(indices, indices + sizeof(indices) / sizeof(GLuint));
 	std::vector <Texture> tex(textures, textures + sizeof(textures) / sizeof(Texture));
-
-	glm::vec3 plankPosition = glm::vec3(0.0f);
-	glm::vec3 plankRotation = glm::vec3(0.0f, 0.0f, 0.0f);;
-	glm::vec3 plankScale = glm::vec3(1.0f);
-
+	
 	Mesh plank(verts, ind, tex);
 
 	plank.UpdateBoundingBoxScale(plankScale);
@@ -281,10 +297,6 @@ int main()
 	std::vector <GLuint> cubeInd(instancedIndices, instancedIndices + sizeof(instancedIndices) / sizeof(GLuint));
 	std::vector <Texture> cubeTex(instancedTextures, instancedTextures + sizeof(instancedTextures) / sizeof(Texture));
 
-	//glm::vec3 cubePosition = cubePos;
-	glm::vec3 cubeRotation = glm::vec3(0.0f);
-	glm::vec3 cubeScale = glm::vec3(0.2f);
-
 	Mesh cube(cubeVerts, cubeInd, cubeTex);
 
 	cube.UpdateBoundingBoxScale(cubeScale);
@@ -298,9 +310,7 @@ int main()
 	std::vector <GLuint> lightInd(lightIndices, lightIndices + sizeof(lightIndices) / sizeof(GLuint));
 	std::vector <Texture> lightTex;
 
-	//glm::vec3 lightPosition = glm::vec3(0.0f);
-	glm::vec3 lightRotation = glm::vec3(0.0f);
-	glm::vec3 lightScale = glm::vec3(0.1f);
+	
 
 	Mesh lightCube(lightVerts, lightInd, lightTex);
 
@@ -308,35 +318,68 @@ int main()
 
 #pragma endregion	
 
-#pragma region Shadow Map
-	GLuint depthMapFBO;
-	glGenFramebuffers(1, &depthMapFBO);
+#pragma region Directional Shadow Map
+	//GLuint depthMapFBO;
+	//glGenFramebuffers(1, &depthMapFBO);
 
-	
+	//
 
-	GLuint shadowMap;
-	glGenTextures(1, &shadowMap);
-	glBindTexture(GL_TEXTURE_2D, shadowMap);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap, 0);
-	glDrawBuffer(GL_NONE);
-	glReadBuffer(GL_NONE);
+	//GLuint shadowMap;
+	//glGenTextures(1, &shadowMap);
+	//glBindTexture(GL_TEXTURE_2D, shadowMap);
+	//glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	//glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap, 0);
+	//glDrawBuffer(GL_NONE);
+	//glReadBuffer(GL_NONE);
 
-	// Always check that our framebuffer is ok
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		return false;
+	//// Always check that our framebuffer is ok
+	//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	//	return false;
 
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	
 
 #pragma endregion
+
+#pragma region Point Light Shadow Map
+	// Framebuffer for Cubemap Shadow Map
+	std::vector<GLuint> pointShadowMapFBOs(MAX_POINTLIGHTS);
+	std::vector<GLuint> depthCubemaps(MAX_POINTLIGHTS);
+
+	for (unsigned int i = 0; i < MAX_POINTLIGHTS; ++i) 
+	{
+		glGenFramebuffers(1, &pointShadowMapFBOs[i]);
+		// Texture for Cubemap Shadow Map FBO
+		glGenTextures(1, &depthCubemaps[i]);
+
+		glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemaps[i]);
+		for (unsigned int i = 0; i < 6; ++i)
+		{
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+		}
+
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, pointShadowMapFBOs[i]);
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemaps[i], 0);
+		glDrawBuffer(GL_NONE);
+		glReadBuffer(GL_NONE);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+	
+#pragma endregion
+	
 
 	//Set Light Color, the value is fed into LightShader.fs
 	glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
@@ -363,121 +406,182 @@ int main()
 
 
 		//Setup lights
+
+		mainShader.setInt("num_pointLights", pointLights.size());
 		SetupLights(mainShader, camera);
 
-
-
-		// 1. render depth of scene to texture (from light's perspective)
-		// --------------------------------------------------------------
-		glm::mat4 lightProjection, lightView;
-		glm::mat4 lightSpaceMatrix;
-		float near_plane = 1.0f, far_plane = 25.0f;
-		//lightProjection = glm::perspective(glm::radians(45.0f), (GLfloat)SHADOW_WIDTH / (GLfloat)SHADOW_HEIGHT, near_plane, far_plane); // note that if you use a perspective projection matrix you'll have to change the light position as the current light position isn't enough to reflect the whole scene
-		lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
-		lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-		lightSpaceMatrix = lightProjection * lightView;
-		// render scene from light's point of view
-		depthShader.Activate();
-		depthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
-
-		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-		glClear(GL_DEPTH_BUFFER_BIT);
-
-#pragma region Scene Objects
-#pragma region Plank Draw
-
-		plank.SetMeshProperties(depthShader, camera, plankPosition, plankRotation, plankScale);
-		plank.Draw(depthShader);
-
-		/*cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
-		cube.Draw(mainShader);*/
-
-#pragma endregion 
-
-#pragma region Light Cube draw
-
-
-		mainShader.setInt("num_pointLights", pointLights.size());
-		for (unsigned int i = 0; i < pointLights.size(); i++)
+		for (unsigned int i = 0; i < pointLights.size(); ++i)
 		{
-			glm::mat4 lightModel = glm::mat4(1.0f);
+			mainShader.Activate();
+			mainShader.setInt("depthMap[" + std::to_string(i) + "]", 2);
 
-			/*pointLightPositions[i].x = radius * cos(speed * currentFrame);
-			pointLightPositions[i].y = radius * sin(speed * currentFrame);*/
-			lightCube.SetMeshProperties(lightShader, camera, pointLights[i].Position, lightRotation, lightScale);
-			lightShader.setVec3("lightColor", pointLights[i].Color);
-			lightCube.Draw(lightShader);
+			// 0. create depth cubemap transformation matrices
+			// -----------------------------------------------
+			float near_plane = 1.0f;
+			float far_plane = 25.0f;
+			glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT, near_plane, far_plane);
+			std::vector<glm::mat4> shadowTransforms;
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[0].Position, pointLights[0].Position + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[0].Position, pointLights[0].Position + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[0].Position, pointLights[0].Position + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[0].Position, pointLights[0].Position + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[0].Position, pointLights[0].Position + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[0].Position, pointLights[0].Position + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+
+			// 1. render scene to depth cubemap
+			// --------------------------------
+			glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+			glBindFramebuffer(GL_FRAMEBUFFER, pointShadowMapFBOs[i]);
+			glClear(GL_DEPTH_BUFFER_BIT);
+			simpleDepthShader.Activate();
+			for (unsigned int j = 0; j < 6; ++j)
+			{ 
+				simpleDepthShader.setMat4("shadowMatrices[" + std::to_string(j) + "]", shadowTransforms[j]); 
+			}				
+			simpleDepthShader.setFloat("far_plane", far_plane);
+			simpleDepthShader.setVec3("lightPos", pointLights[i].Position);
+			//simpleDepthShader.setVec3("pointLights[" + std::to_string(0) + "].position", pointLights[0].Position);
+
+			RenderScene(simpleDepthShader, plank, cube);
+			RenderLightObj(simpleDepthShader, lightCube);
+
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+			// 2. render scene as normal 
+			// -------------------------
+			glViewport(0, 0, SCR_WIDTH, SCR_LENGTH);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			mainShader.Activate();
+			glm::mat4 projection = camera.GetProjectionMatrix();
+			glm::mat4 view = camera.GetViewMatrix();
+			mainShader.setMat4("projection", projection);
+			mainShader.setMat4("view", view);
+			// set lighting uniforms
+			//mainShader.setVec3("lightPos", pointLights[0].Position);
+			mainShader.setVec3("pointLights[" + std::to_string(i) + "].position", pointLights[i].Position);
+			mainShader.setVec3("viewPos", camera.Position);
+			//shader.setInt("shadows", shadows); // enable/disable shadows by pressing 'SPACE'
+			mainShader.setFloat("far_plane", far_plane);
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemaps[i]);
+			//renderScene(shader);
 		}
 
-#pragma endregion
+		//Render Scene
+		RenderScene(mainShader, plank, cube);
+		RenderLightObj(lightShader, lightCube);
 
-#pragma region Instanced Cube Draw
-
-		for (int i = 0; i < cubePositions.size(); i++)
-		{
-			cube.SetMeshProperties(depthShader, camera, cubePositions[i], cubeRotation, cubeScale);
-			cube.Draw(depthShader);
-		}
-
-#pragma endregion 
-#pragma endregion
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		// reset viewport
-		glViewport(0, 0, SCR_WIDTH, SCR_LENGTH);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		// 2. render scene as normal using the generated depth/shadow map  
-		// --------------------------------------------------------------
-		mainShader.Activate();		
-		mainShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
-
-		mainShader.Activate();
-		glActiveTexture(GL_TEXTURE0 + 2);
-		glBindTexture(GL_TEXTURE_2D, shadowMap);
-		mainShader.setInt("shadowMap", 2);
-
-#pragma region Scene Objects
-#pragma region Plank Draw
-
-		plank.SetMeshProperties(mainShader, camera, plankPosition, plankRotation, plankScale);
-		plank.Draw(mainShader);
-
-		/*cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
-		cube.Draw(mainShader);*/
-
-#pragma endregion 
-
-#pragma region Light Cube draw
-
-
-		mainShader.setInt("num_pointLights", pointLights.size());
-		for (unsigned int i = 0; i < pointLights.size(); i++)
-		{
-			glm::mat4 lightModel = glm::mat4(1.0f);
-
-			/*pointLightPositions[i].x = radius * cos(speed * currentFrame);
-			pointLightPositions[i].y = radius * sin(speed * currentFrame);*/
-			lightCube.SetMeshProperties(lightShader, camera, pointLights[i].Position, lightRotation, lightScale);
-			lightShader.setVec3("lightColor", pointLights[i].Color);
-			lightCube.Draw(lightShader);
-		}
-
-#pragma endregion
-
-#pragma region Instanced Cube Draw
-
-		for (int i = 0; i < cubePositions.size(); i++)
-		{
-			cube.SetMeshProperties(mainShader, camera, cubePositions[i], cubeRotation, cubeScale);
-			cube.Draw(mainShader);
-		}
-
-#pragma endregion 
-#pragma endregion
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+//		// 1. render depth of scene to texture (from light's perspective)
+//		// --------------------------------------------------------------
+//		glm::mat4 lightProjection, lightView;
+//		glm::mat4 lightSpaceMatrix;
+//		float near_plane = 1.0f, far_plane = 25.0f;
+//		//lightProjection = glm::perspective(glm::radians(45.0f), (GLfloat)SHADOW_WIDTH / (GLfloat)SHADOW_HEIGHT, near_plane, far_plane); // note that if you use a perspective projection matrix you'll have to change the light position as the current light position isn't enough to reflect the whole scene
+//		lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+//		lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
+//		lightSpaceMatrix = lightProjection * lightView;
+//		// render scene from light's point of view
+//		depthShader.Activate();
+//		depthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+//
+//		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+//		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+//		glClear(GL_DEPTH_BUFFER_BIT);
+//
+//#pragma region Scene Objects
+//#pragma region Plank Draw
+//
+//		plank.SetMeshProperties(depthShader, camera, plankPosition, plankRotation, plankScale);
+//		plank.Draw(depthShader);
+//
+//		/*cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
+//		cube.Draw(mainShader);*/
+//
+//#pragma endregion 
+//
+//#pragma region Light Cube draw
+//
+//
+//		mainShader.setInt("num_pointLights", pointLights.size());
+//		for (unsigned int i = 0; i < pointLights.size(); i++)
+//		{
+//			glm::mat4 lightModel = glm::mat4(1.0f);
+//
+//			/*pointLightPositions[i].x = radius * cos(speed * currentFrame);
+//			pointLightPositions[i].y = radius * sin(speed * currentFrame);*/
+//			lightCube.SetMeshProperties(lightShader, camera, pointLights[i].Position, lightRotation, lightScale);
+//			lightShader.setVec3("lightColor", pointLights[i].Color);
+//			lightCube.Draw(lightShader);
+//		}
+//
+//#pragma endregion
+//
+//#pragma region Instanced Cube Draw
+//
+//		for (int i = 0; i < cubePositions.size(); i++)
+//		{
+//			cube.SetMeshProperties(depthShader, camera, cubePositions[i], cubeRotation, cubeScale);
+//			cube.Draw(depthShader);
+//		}
+//
+//#pragma endregion 
+//#pragma endregion
+//
+//		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+//
+//		// reset viewport
+//		glViewport(0, 0, SCR_WIDTH, SCR_LENGTH);
+//		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+//
+//		// 2. render scene as normal using the generated depth/shadow map  
+//		// --------------------------------------------------------------
+//		mainShader.Activate();		
+//		mainShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+//
+//		mainShader.Activate();
+//		glActiveTexture(GL_TEXTURE0 + 2);
+//		glBindTexture(GL_TEXTURE_2D, shadowMap);
+//		mainShader.setInt("shadowMap", 2);
+//
+//#pragma region Scene Objects
+//#pragma region Plank Draw
+//
+//		plank.SetMeshProperties(mainShader, camera, plankPosition, plankRotation, plankScale);
+//		plank.Draw(mainShader);
+//
+//		/*cube.SetMeshProperties(mainShader, camera, cubePos, cubeRotation, cubeScale);
+//		cube.Draw(mainShader);*/
+//
+//#pragma endregion 
+//
+//#pragma region Light Cube draw
+//
+//
+//		mainShader.setInt("num_pointLights", pointLights.size());
+//		for (unsigned int i = 0; i < pointLights.size(); i++)
+//		{
+//			glm::mat4 lightModel = glm::mat4(1.0f);
+//
+//			/*pointLightPositions[i].x = radius * cos(speed * currentFrame);
+//			pointLightPositions[i].y = radius * sin(speed * currentFrame);*/
+//			lightCube.SetMeshProperties(lightShader, camera, pointLights[i].Position, lightRotation, lightScale);
+//			lightShader.setVec3("lightColor", pointLights[i].Color);
+//			lightCube.Draw(lightShader);
+//		}
+//
+//#pragma endregion
+//
+//#pragma region Instanced Cube Draw
+//
+//		for (int i = 0; i < cubePositions.size(); i++)
+//		{
+//			cube.SetMeshProperties(mainShader, camera, cubePositions[i], cubeRotation, cubeScale);
+//			cube.Draw(mainShader);
+//		}
+//
+//#pragma endregion 
+//#pragma endregion
+//		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		DrawImGuiWindow();
 
@@ -551,7 +655,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		glm::mat4 viewProjectionInverse = glm::inverse(projection * view);
 
 		// Create a NDC coordinate with z set to 0.0 for near plane or 1.0 for far plane
-		glm::vec4 screenPos = glm::vec4(xNormalized, yNormalized, 0.9f, 1.0f);
+		glm::vec4 screenPos = glm::vec4(xNormalized, yNormalized, 0.89f, 1.0f);
 
 		// Transform NDC to world coordinates
 		glm::vec4 worldPos = viewProjectionInverse * screenPos;
@@ -587,7 +691,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		glm::mat4 viewProjectionInverse = glm::inverse(projection * view);
 
 		// Create a NDC coordinate with z set to 0.0 for near plane or 1.0 for far plane
-		glm::vec4 screenPos = glm::vec4(xNormalized, yNormalized, 0.9f, 1.0f);
+		glm::vec4 screenPos = glm::vec4(xNormalized, yNormalized, 0.85f, 1.0f);
 
 		// Transform NDC to world coordinates
 		glm::vec4 worldPos = viewProjectionInverse * screenPos;
@@ -690,22 +794,11 @@ void SetupLights(Shader& shader, Camera& camera)
 		shader.setVec3("pointLights[" + std::to_string(i) + "].position", pointLights[i].Position);
 		shader.setVec3("pointLights[" + std::to_string(i) + "].ambient", 0.05f, 0.05f, 0.05f);
 		shader.setVec3("pointLights[" + std::to_string(i) + "].diffuse", pointLights[i].Color);
-		shader.setVec3("pointLights[" + std::to_string(i) + "].specular", 1.0f, 1.0f, 1.0f);
-		shader.setFloat("pointLights[" + std::to_string(i) + "].constant", 1.0f);
-		shader.setFloat("pointLights[" + std::to_string(i) + "].linear", 0.09f);
-		shader.setFloat("pointLights[" + std::to_string(i) + "].quadratic", 0.032f);
+		shader.setVec3("pointLights[" + std::to_string(i) + "].specular", 0.5f, 0.5f, 0.5f);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].constant", pointLights[i].constant);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].linear", pointLights[i].linear);
+		shader.setFloat("pointLights[" + std::to_string(i) + "].quadratic", pointLights[i].quadratic);
 	}
-
-	/*for (int i = 0; i < 4; ++i)
-	{
-		shader.setVec3("pointLights[" + std::to_string(i) + "].position", pointLightPositions[i]);
-		shader.setVec3("pointLights[" + std::to_string(i) + "].ambient", 0.05f, 0.05f, 0.05f);
-		shader.setVec3("pointLights[" + std::to_string(i) + "].diffuse", 0.8f, 0.8f, 0.8f);
-		shader.setVec3("pointLights[" + std::to_string(i) + "].specular", 1.0f, 1.0f, 1.0f);
-		shader.setFloat("pointLights[" + std::to_string(i) + "].constant", 1.0f);
-		shader.setFloat("pointLights[" + std::to_string(i) + "].linear", 0.09f);
-		shader.setFloat("pointLights[" + std::to_string(i) + "].quadratic", 0.032f);
-	}*/
 
 	// spotLight
 	shader.setVec3("spotLight.position", camera.Position);
@@ -718,6 +811,46 @@ void SetupLights(Shader& shader, Camera& camera)
 	shader.setFloat("spotLight.quadratic", 0.032f);
 	shader.setFloat("spotLight.cutOff", glm::cos(glm::radians(12.5f)));
 	shader.setFloat("spotLight.outerCutOff", glm::cos(glm::radians(15.0f)));
+}
+
+void RenderScene(Shader& shader, Mesh plank, Mesh cube) 
+{
+
+#pragma region Plank Draw
+
+	plank.SetMeshProperties(shader, camera, plankPosition, plankRotation, plankScale);
+	plank.Draw(shader);
+
+#pragma endregion 
+
+#pragma region Instanced Cube Draw
+
+	for (int i = 0; i < cubePositions.size(); i++)
+	{
+		cube.SetMeshProperties(shader, camera, cubePositions[i], cubeRotation, cubeScale);
+		cube.Draw(shader);
+	}
+
+#pragma endregion 
+
+}
+
+void RenderLightObj(Shader& lightShader, Mesh lightCube) 
+{
+#pragma region Light Cube draw
+	
+	for (unsigned int i = 0; i < pointLights.size(); i++)
+	{
+		glm::mat4 lightModel = glm::mat4(1.0f);
+
+		/*pointLightPositions[i].x = radius * cos(speed * currentFrame);
+		pointLightPositions[i].y = radius * sin(speed * currentFrame);*/
+		lightCube.SetMeshProperties(lightShader, camera, pointLights[i].Position, lightRotation, lightScale);
+		lightShader.setVec3("lightColor", pointLights[i].Color);
+		lightCube.Draw(lightShader);
+	}
+
+#pragma endregion
 }
 
 #pragma region ImGUI
@@ -756,6 +889,9 @@ void DrawImGuiWindow()
 			PointLight& light = pointLights[i];
 			ImGui::PushID(i);
 			ImGui::SliderFloat3("Position", &light.Position.x, -10, 10);
+			ImGui::SliderFloat("Constant", &light.constant, 0, 2);
+			ImGui::SliderFloat("Linear", &light.linear, 0, 2);
+			ImGui::SliderFloat("Quadratic", &light.quadratic, 0, 2);
 			ImGui::ColorEdit3("Color", &light.Color.x);
 			ImGui::PopID();
 		}		
