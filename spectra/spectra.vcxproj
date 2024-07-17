@@ -178,6 +178,9 @@
     <None Include="FragmentShader.fs" />
     <None Include="LightShader.fs" />
     <None Include="LightShader.vs" />
+    <None Include="PointLightShadowDepthFS.fs" />
+    <None Include="PointLightShadowDepthGS.gs" />
+    <None Include="PointLightShadowDepthVS.vs" />
     <None Include="ShadowDepthFragShader.fs" />
     <None Include="ShadowDepthVertShader.vs" />
     <None Include="VertexShader.vs" />
